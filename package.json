@@ -1,5 +1,5 @@
 {
-  "name": "shadowed-haven",
+  "name": "midnight-at-the-voss-manor",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -17,6 +17,7 @@
     "canvas": "^3.2.0",
     "dotenv": "^17.2.3",
     "framer-motion": "^10.16.0",
+    "groq-sdk": "^0.37.0",
     "next": "^14.0.0",
     "openai": "^4.20.0",
     "react": "^18.2.0",

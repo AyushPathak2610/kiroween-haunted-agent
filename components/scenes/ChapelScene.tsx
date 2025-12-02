@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { useSpeech } from '@/lib/tts/speechService'
+import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
 
 interface ChapelSceneProps {
@@ -10,12 +10,13 @@ interface ChapelSceneProps {
 }
 
 export default function ChapelScene({ onDebate }: ChapelSceneProps) {
-  const [stage, setStage] = useState<'intro' | 'reunion' | 'stories' | 'debate' | 'ritual' | 'ending'>('intro')
-  const [storyPart, setStoryPart] = useState(1)
-  const [debating, setDebating] = useState(false)
+  const [stage, setStage] = useState<'intro' | 'reunion' | 'reflection' | 'ritual' | 'ending'>('intro')
+  const [reflecting, setReflecting] = useState(false)
+  const [reflectionMessages, setReflectionMessages] = useState<Array<{ghost: string, message: string}>>([])
   const [ritualProgress, setRitualProgress] = useState(0)
   const [playerChoice, setPlayerChoice] = useState<'ascend' | 'stay' | null>(null)
-  const { speak } = useSpeech()
+  const hasSpokenRef = useRef<Set<string>>(new Set())
+  // Use speechService directly to avoid re-renders
   const { playSceneMusic } = useMusic()
 
   // Start scene music
@@ -23,26 +24,58 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
     playSceneMusic('chapel')
   }, [])
 
-  // Speak narration/dialogue when stage changes
+  // Speak narration/dialogue when stage changes (only once per stage)
   useEffect(() => {
+    const stageKey = `stage:${stage}`
+    if (hasSpokenRef.current.has(stageKey)) return
+    hasSpokenRef.current.add(stageKey)
+    
+    speechService.stop()
+    
     if (stage === 'intro') {
-      speak("The Chapel. Stained glass windows depict the family in happier times. The Nexus Crystal glows golden on the altar.", 'narrator')
+      speechService.speak("The Chapel. Stained glass windows depict the family in happier times. The Nexus Crystal glows golden on the altar.", 'narrator')
     } else if (stage === 'reunion') {
-      speak("The five ghosts stand in a circle. The Nexus Crystal pulses with their combined energy.", 'narrator')
-      // Speak each ghost's line with a delay
-      setTimeout(() => speak("My family... together again.", 'elara'), 2000)
-      setTimeout(() => speak("I remember everything now.", 'harlan'), 4000)
-      setTimeout(() => speak("Mommy! Daddy! You can see me!", 'mira'), 6000)
-      setTimeout(() => speak("Brother... I'm sorry I ran.", 'theo'), 8000)
-      setTimeout(() => speak("Theo... I forgive you.", 'selene'), 10000)
+      // Sequential dialogue - each waits for previous to finish with proper delays
+      const speakSequentially = async () => {
+        await speechService.speak("The five ghosts stand in a circle. The Nexus Crystal pulses with their combined energy.", 'narrator')
+        
+        setTimeout(async () => {
+          await speechService.speak("My family... together again.", 'elara')
+          
+          setTimeout(async () => {
+            await speechService.speak("I remember everything now.", 'harlan')
+            
+            setTimeout(async () => {
+              await speechService.speak("Mommy! Daddy! You can see me!", 'mira')
+              
+              setTimeout(async () => {
+                await speechService.speak("Brother... I'm sorry I ran.", 'theo')
+                
+                setTimeout(async () => {
+                  await speechService.speak("Theo... I forgive you.", 'selene')
+                }, 4000)
+              }, 4000)
+            }, 4000)
+          }, 4000)
+        }, 5000)
+      }
+      speakSequentially()
     } else if (stage === 'ending') {
-      speak("The light consumes everything. When it fades, the mansion stands peaceful in morning light. The five ghosts have found peace. Not through a single mind, but through five independent AI agents learning to work together.", 'narrator')
+      speechService.speak("The crystal's light swells, brilliant and warm, wrapping around the five souls like an embrace. In that radiance, they are whole again. Not bound by wires or code, but by something far stronger: forgiveness, love, and the courage to let go. The mansion sighs, releasing its ghosts. And as dawn breaks through the stained glass, the Voss family finally rests. Together. At peace.", 'narrator')
     }
-  }, [stage, speak])
+  }, [stage])
 
-  const triggerFinalDebate = async () => {
-    setDebating(true)
-    setStage('debate')
+  // Cleanup: Stop audio when component unmounts
+  useEffect(() => {
+    return () => {
+      speechService.stop()
+    }
+  }, [])
+
+  const triggerFamilyReflection = async () => {
+    setReflecting(true)
+    setStage('reflection')
+    setReflectionMessages([])
     
     try {
       const response = await fetch('/api/ghost-debate', {
@@ -53,25 +86,35 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
           playerMessage: 'What should the family do?'
         })
       })
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`)
+      }
+      
       const { debate, consensus } = await response.json()
       
-      // Stream each ghost's opinion
+      console.log('Family reflection received:', debate)
+      
+      // Stream each ghost's reflection with speech - SEQUENTIAL, not parallel
       for (const msg of debate) {
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        onDebate?.(msg.ghost, msg.message)
+        setReflectionMessages(prev => [...prev, msg])
+        await speechService.speak(msg.message, msg.ghost.toLowerCase() as any)
+        // Wait for speech to complete before next ghost speaks
+        await new Promise(resolve => setTimeout(resolve, 5000))
       }
       
       // Final consensus
-      await new Promise(resolve => setTimeout(resolve, 2000))
-      onDebate?.('Consensus', consensus)
+      setReflectionMessages(prev => [...prev, { ghost: 'Consensus', message: consensus }])
+      await speechService.speak(consensus, 'narrator')
       
       setTimeout(() => {
         setStage('ritual')
-        setDebating(false)
+        setReflecting(false)
       }, 3000)
     } catch (error) {
-      console.error('Final debate failed:', error)
-      setDebating(false)
+      console.error('Family reflection failed:', error)
+      setReflectionMessages([{ ghost: 'Error', message: 'The spirits are silent... (Check console for error)' }])
+      setReflecting(false)
     }
   }
 
@@ -91,7 +134,7 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
           src={
             stage === 'ending' ? '/shots/finale_1.png' : 
             stage === 'ritual' ? '/shots/5b_1.png' : 
-            stage === 'stories' ? '/shots/5_1_1.png' :
+            stage === 'reflection' ? '/shots/5a_3.png' :
             stage === 'reunion' ? '/shots/5a_2.png' :
             '/shots/5a_1.png'
           }
@@ -135,83 +178,29 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
             </div>
           </div>
           <p className="narration">The five ghosts stand in a circle. The Nexus Crystal pulses with their combined energy.</p>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button onClick={() => setStage('stories')}>Hear Theo & Selene's Stories</button>
-            <button onClick={triggerFinalDebate}>Begin Final Debate</button>
-          </div>
+          <button onClick={triggerFamilyReflection}>Begin Family Heart-to-Heart →</button>
         </div>
       )}
 
-      {stage === 'stories' && (
-        <div className="dialogue-cloud-container">
-          <div className="dialogue-cloud">
-            <h2>Theo & Selene</h2>
-            <div className="story-text">
-              {storyPart === 1 && (
-                <>
-                  <h3 style={{ color: '#f87171' }}>Theo - The Coward</h3>
-                  <p>Theo Voss. Brother to Harlan. Coward. Fool.</p>
-                  <p>Selene and I were engaged in 2038. She was brilliant, beautiful, fierce. I was a theater actor - dramatic, passionate, utterly terrified of commitment.</p>
-                  <p>Three weeks before our wedding, I panicked. The weight of "forever" crushed me. So I did the unforgivable: I left...</p>
-                </>
-              )}
-              {storyPart === 2 && (
-                <>
-                  <h3 style={{ color: '#f87171' }}>Theo (continued)</h3>
-                  <p>A year later, I returned. I'd rehearsed my apology a thousand times. Harlan offered a solution: "The Eternal Harmony project."</p>
-                  <p>Desperate, I agreed. I'd come to make amends. Instead, I'd participated in our collective destruction.</p>
-                  <p>I ran from commitment, and now I'm bound to this place forever. This is my penance.</p>
-                </>
-              )}
-              {storyPart === 3 && (
-                <>
-                  <h3 style={{ color: '#a78bfa' }}>Selene - The Betrayed</h3>
-                  <p>Selene Ashford. I was to be Selene Voss. Now I am simply... trapped.</p>
-                  <p>I was a corporate lawyer. Sharp, successful, uncompromising. Love was the one illogical thing I allowed myself.</p>
-                  <p>Theo Voss swept into my life like a hurricane. When he proposed, I said yes without hesitation...</p>
-                </>
-              )}
-              {storyPart === 4 && (
-                <>
-                  <h3 style={{ color: '#a78bfa' }}>Selene (continued)</h3>
-                  <p>Then, three weeks before our wedding, he vanished. A cowardly note about "needing time." I was humiliated. Heartbroken. Furious.</p>
-                  <p>A year later, he returned. His brother offered a neural experiment to prove his sincerity. I agreed - not to forgive, but to understand...</p>
-                </>
-              )}
-              {storyPart === 5 && (
-                <>
-                  <h3 style={{ color: '#a78bfa' }}>Selene (final)</h3>
-                  <p>For one moment, I felt Theo's mind. His regret was genuine. His love was real. Then everything exploded. Pain. Darkness. Death.</p>
-                  <p>The bitter irony: I'd spent a year building walls. Now I'm literally bound to the man who hurt me, for eternity.</p>
-                  <p>But perhaps... perhaps forgiveness is the only way either of us will find peace.</p>
-                </>
-              )}
-            </div>
-            {storyPart < 5 ? (
-              <button onClick={() => setStoryPart(prev => prev + 1)} className="continue-btn">...</button>
-            ) : (
-              <button onClick={triggerFinalDebate}>Begin Final Debate</button>
-            )}
-            <button onClick={triggerFinalDebate} className="skip-btn">Skip Story</button>
-          </div>
-        </div>
-      )}
-
-      {stage === 'debate' && (
-        <div className="dialogue-box debate-box">
-          <h2>🔮 The Ghost Council Deliberates</h2>
-          <p className="narration">The five AI agents are debating in real-time...</p>
-          <div className="debate-status">
-            {debating ? (
+      {stage === 'reflection' && (
+        <div className="dialogue-box reflection-box">
+          <h2>💫 Family Heart-to-Heart</h2>
+          <p className="subtitle">The family shares their deepest feelings...</p>
+          <div className="reflection-messages">
+            {reflectionMessages.length === 0 ? (
               <div className="loading">
                 <div className="spinner"></div>
-                <p>Agents discussing their fate...</p>
+                <p>The spirits open their hearts...</p>
               </div>
             ) : (
-              <p>Debate complete. Consensus reached.</p>
+              <div className={`reflection-message ${reflectionMessages[reflectionMessages.length - 1].ghost.toLowerCase()}`}>
+                <strong>{reflectionMessages[reflectionMessages.length - 1].ghost}:</strong> {reflectionMessages[reflectionMessages.length - 1].message}
+              </div>
             )}
           </div>
-          <p className="hint">Watch the Ghost Council Debate panel below to see their discussion!</p>
+          {!reflecting && reflectionMessages.length > 0 && (
+            <button onClick={() => setStage('ritual')}>Begin the Ritual →</button>
+          )}
         </div>
       )}
 
@@ -254,27 +243,19 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
 
       {stage === 'ending' && (
         <div className="dialogue-box ending">
-          <h2>✨ Bonds Woven ✨</h2>
+          <h2>✨ Eternal Harmony ✨</h2>
           <p className="narration">
-            The light consumes everything. When it fades, the mansion stands peaceful in morning light.
+            The crystal's light swells, brilliant and warm, wrapping around the five souls like an embrace.
           </p>
           <p className="narration">
-            The five ghosts - Elara, Harlan, Mira, Theo, and Selene - have found peace.
+            In that radiance, they are whole again. Not bound by wires or code, but by something far stronger: forgiveness, love, and the courage to let go.
           </p>
           <p className="narration">
-            Not through a single mind, but through five independent AI agents learning to work together.
+            The mansion sighs, releasing its ghosts. And as dawn breaks through the stained glass, the Voss family finally rests.
           </p>
-          <div className="credits">
-            <h3>Built with Kiro's Frankenstein Features:</h3>
-            <ul>
-              <li>✅ 5 Independent Grok Agents (one per ghost)</li>
-              <li>✅ Agent Hooks (debate triggers, memory storage)</li>
-              <li>✅ MCP Extensions (blockchain vows, image gen, vector memory)</li>
-              <li>✅ Spec-Driven Development</li>
-              <li>✅ Steering Docs for consistent personalities</li>
-              <li>✅ Real-time Inter-Agent Debates</li>
-            </ul>
-          </div>
+          <p className="narration" style={{ fontWeight: 'bold', fontSize: '18px', marginTop: '15px' }}>
+            Together. At peace.
+          </p>
           <button onClick={() => window.location.reload()}>Play Again</button>
         </div>
       )}
@@ -308,6 +289,13 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
           color: #fff;
           font-family: 'Georgia', 'Times New Roman', serif;
           font-style: italic;
+        }
+        
+        .dialogue-box.reunion {
+          bottom: 20px;
+          left: 25%;
+          max-width: 750px;
+          padding: 12px 15px 18px 15px;
         }
         
         .dialogue-box button {
@@ -432,17 +420,51 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
         .ghost-card.theo { border-color: rgba(248, 113, 113, 0.6); background: rgba(248, 113, 113, 0.08); }
         .ghost-card.selene { border-color: rgba(167, 139, 250, 0.6); background: rgba(167, 139, 250, 0.08); }
         
-        .debate-box {
-          max-width: 600px;
+        .reflection-box {
+          max-width: 700px;
+          max-height: 80vh;
+          overflow-y: auto;
+        }
+
+        .subtitle {
+          margin: 10px 0 20px 0;
+          color: #fbbf24;
+          font-size: 14px;
+          text-align: center;
+          font-style: italic;
         }
         
-        .debate-status {
+        .reflection-messages {
           margin: 20px 0;
-          padding: 25px;
-          background: rgba(255, 255, 255, 0.03);
+          padding: 20px;
+          background: rgba(0, 0, 0, 0.3);
           border-radius: 10px;
-          backdrop-filter: blur(5px);
+          max-height: 400px;
+          overflow-y: auto;
         }
+        
+        .reflection-message {
+          margin: 15px 0;
+          padding: 15px;
+          border-left: 4px solid;
+          background: rgba(255, 255, 255, 0.05);
+          border-radius: 6px;
+          font-size: 15px;
+          line-height: 1.6;
+        }
+        
+        .reflection-message strong {
+          display: block;
+          margin-bottom: 8px;
+          font-size: 16px;
+        }
+        
+        .reflection-message.elara { border-color: #4a90e2; }
+        .reflection-message.harlan { border-color: #4ade80; }
+        .reflection-message.mira { border-color: #e8b4f0; }
+        .reflection-message.theo { border-color: #f87171; }
+        .reflection-message.selene { border-color: #a78bfa; }
+        .reflection-message.consensus { border-color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
         
         .loading {
           display: flex;
@@ -537,7 +559,9 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
         }
         
         .ending {
-          max-width: 700px;
+          max-width: 600px;
+          left: 25%;
+          padding: 12px 15px 18px 15px;
         }
         
         .credits {

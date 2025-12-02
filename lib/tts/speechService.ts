@@ -1,149 +1,41 @@
-// Text-to-Speech service for character dialogue with ElevenLabs API
+// Text-to-Speech service for character dialogue with Azure Cognitive Services
+// Free tier: 500,000 characters/month (Neural voices)
+// Full SSML support for emotions, pauses, pitch, rate control
+
+import { generateAzureTTS } from './azureTTS'
 
 export type GhostVoice = 'elara' | 'harlan' | 'mira' | 'theo' | 'selene' | 'narrator'
 
-interface VoiceConfig {
-  // ElevenLabs voice IDs (fallback to browser TTS if API unavailable)
-  elevenLabsVoiceId?: string
-  // Browser TTS fallback
-  pitch: number
-  rate: number
-  volume: number
-  voiceIndex?: number
-  // Character emotion settings
-  stability: number // 0-1, lower = more expressive
-  similarityBoost: number // 0-1, higher = more similar to original voice
-}
-
-const VOICE_CONFIGS: Record<GhostVoice, VoiceConfig> = {
-  elara: {
-    // Maternal, gentle, warm - Bella (softer than Rachel)
-    elevenLabsVoiceId: 'EXAVITQu4vr4xnSDxMaL', // Bella - gentle, maternal
-    pitch: 1.1,
-    rate: 0.8, // Slower, more deliberate
-    volume: 0.9,
-    voiceIndex: 0,
-    stability: 0.3, // Very expressive for emotional moments
-    similarityBoost: 0.7
-  },
-  harlan: {
-    // Scientific, confused, logical - Clyde (older, wiser)
-    elevenLabsVoiceId: '2EiwWnXFnvU5JabPnv8n', // Clyde - mature, thoughtful
-    pitch: 0.85,
-    rate: 0.85, // Measured, confused
-    volume: 0.85,
-    voiceIndex: 1,
-    stability: 0.5, // Moderate for confusion
-    similarityBoost: 0.75
-  },
-  mira: {
-    // Childlike, innocent, playful - Dorothy (young girl)
-    elevenLabsVoiceId: 'ThT5KcBeYPX3keUQqHPh', // Dorothy - childlike, sweet
-    pitch: 1.5,
-    rate: 1.0, // Natural child pace
-    volume: 1.0,
-    voiceIndex: 0,
-    stability: 0.2, // Very expressive, emotional
-    similarityBoost: 0.65
-  },
-  theo: {
-    // Dramatic, regretful, theatrical - Antoni (emotional, expressive)
-    elevenLabsVoiceId: 'ErXwobaYiN019PkySvjV', // Antoni - emotional, dramatic
-    pitch: 0.95,
-    rate: 0.9, // Deliberate, theatrical
-    volume: 0.9,
-    voiceIndex: 1,
-    stability: 0.25, // Very expressive for drama
-    similarityBoost: 0.7
-  },
-  selene: {
-    // Cold but softening, elegant, demanding - Charlotte (sophisticated)
-    elevenLabsVoiceId: 'XB0fDUnXU5powFXDhCwa', // Charlotte - elegant, controlled
-    pitch: 1.05,
-    rate: 0.75, // Slow, deliberate, commanding
-    volume: 0.85,
-    voiceIndex: 0,
-    stability: 0.6, // More controlled, cold
-    similarityBoost: 0.8
-  },
-  narrator: {
-    // Deep, expressive, atmospheric - Adam (deep male voice)
-    elevenLabsVoiceId: 'pNInz6obpgDQGcFmaJgB', // Adam - deep, authoritative
-    pitch: 0.9, // Slightly lower for depth
-    rate: 1.1, // Faster delivery
-    volume: 0.8,
-    voiceIndex: 0,
-    stability: 0.4, // Lower for MORE expressiveness and tonality
-    similarityBoost: 0.75 // Natural variation
-  }
-}
+// Voice configs removed - now handled in azureTTS.ts with SSML
 
 class SpeechService {
-  private synth: SpeechSynthesis | null = null
-  private voices: SpeechSynthesisVoice[] = []
-  private currentUtterance: SpeechSynthesisUtterance | null = null
   private currentAudio: HTMLAudioElement | null = null
   private enabled: boolean = true
-  private useElevenLabs: boolean = true
-  private elevenLabsApiKey: string | null = null
+  private azureApiKey: string | null = null
+  private azureRegion: string | null = null
   private speechQueue: Array<{ text: string; character: GhostVoice; resolve: () => void }> = []
   private isSpeaking: boolean = false
   private audioCache: Map<string, string> = new Map() // Cache audio URLs by text+character
+  private spokenTexts: Set<string> = new Set() // Track what's been spoken to avoid repeats
 
   constructor() {
     if (typeof window !== 'undefined') {
-      // Initialize browser TTS
-      if ('speechSynthesis' in window) {
-        this.synth = window.speechSynthesis
-        this.loadVoices()
-        
-        if (window.speechSynthesis.onvoiceschanged !== undefined) {
-          window.speechSynthesis.onvoiceschanged = () => {
-            this.loadVoices()
-          }
-        }
-      }
-
-      // Check for ElevenLabs API key
-      this.elevenLabsApiKey = process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY || null
-      if (!this.elevenLabsApiKey) {
-        console.log('TTS: ElevenLabs API key not found, using browser TTS fallback')
-        this.useElevenLabs = false
+      // Check for Azure Cognitive Services TTS API key
+      this.azureApiKey = process.env.NEXT_PUBLIC_AZURE_TTS_API_KEY || null
+      this.azureRegion = process.env.NEXT_PUBLIC_AZURE_TTS_REGION || 'eastus'
+      
+      if (!this.azureApiKey) {
+        console.warn('TTS: No Azure API key found. Please add NEXT_PUBLIC_AZURE_TTS_API_KEY to .env')
+        console.warn('TTS: Get free 500k chars/month at: https://azure.microsoft.com/free/cognitive-services/')
+      } else {
+        console.log(`TTS: Using Azure Cognitive Services TTS (500k chars/month free) - Region: ${this.azureRegion}`)
       }
     }
   }
 
-  private loadVoices() {
-    if (this.synth) {
-      this.voices = this.synth.getVoices()
-      console.log('TTS voices loaded:', this.voices.length)
-    }
-  }
 
-  private addEmotionalPauses(text: string, character: GhostVoice): string {
-    // Add SSML-like pauses for emotional delivery
-    let processedText = text
 
-    // Add pauses after ellipsis for dramatic effect
-    processedText = processedText.replace(/\.\.\./g, '... ')
-    
-    // Add pauses after commas for breath
-    processedText = processedText.replace(/,/g, ', ')
-    
-    // Add emphasis for character-specific patterns
-    if (character === 'mira') {
-      // Excited, faster delivery with emphasis on exclamations
-      processedText = processedText.replace(/!/g, '! ')
-    } else if (character === 'theo') {
-      // Dramatic pauses
-      processedText = processedText.replace(/\?/g, '? ')
-    } else if (character === 'selene') {
-      // Cold, deliberate pauses
-      processedText = processedText.replace(/\./g, '. ')
-    }
-
-    return processedText
-  }
+// Emotional pauses now handled in azureTTS.ts with SSML
 
   private getStaticAudioFilename(text: string, character: GhostVoice): string | null {
     // Map text to pre-generated audio files
@@ -183,10 +75,7 @@ class SpeechService {
     return staticAudioMap[text] || null
   }
 
-  private async speakWithElevenLabs(text: string, character: GhostVoice): Promise<void> {
-    const config = VOICE_CONFIGS[character]
-    const processedText = this.addEmotionalPauses(text, character)
-    
+  private async speakWithAPI(text: string, character: GhostVoice): Promise<void> {
     // Check if this is static audio with a pre-generated file
     const staticFilename = this.getStaticAudioFilename(text, character)
     
@@ -208,33 +97,22 @@ class SpeechService {
           console.error(`Failed to load ${audioUrl}, falling back to API`)
           this.currentAudio = null
           // Fallback to API if file doesn't exist
-          this.speakWithElevenLabsAPI(text, character).then(resolve).catch(reject)
+          this.generateWithAPI(text, character).then(resolve).catch(reject)
         }
 
         audio.play().catch((error) => {
           console.error('Audio play failed:', error)
           // If play fails (e.g., autoplay blocked), try API fallback
-          this.speakWithElevenLabsAPI(text, character).then(resolve).catch(reject)
+          this.generateWithAPI(text, character).then(resolve).catch(reject)
         })
       })
     }
     
     // Dynamic text (debates, etc.) - use API with caching
-    return this.speakWithElevenLabsAPI(text, character)
+    return this.generateWithAPI(text, character)
   }
 
-  private async speakWithElevenLabsAPI(text: string, character: GhostVoice): Promise<void> {
-    if (!this.elevenLabsApiKey) {
-      console.error('TTS: ElevenLabs API key not available')
-      throw new Error('ElevenLabs API key not available')
-    }
-
-    const config = VOICE_CONFIGS[character]
-    const processedText = this.addEmotionalPauses(text, character)
-    
-    console.log(`TTS: Calling ElevenLabs API for ${character}: "${text.substring(0, 50)}..."`)
-
-    
+  private async generateWithAPI(text: string, character: GhostVoice): Promise<void> {
     // Create cache key
     const cacheKey = `${character}:${text}`
     
@@ -242,43 +120,27 @@ class SpeechService {
     let audioUrl = this.audioCache.get(cacheKey)
     
     if (!audioUrl) {
-      // Not in cache, fetch from API
+      // Not in cache, generate from API
       try {
-        console.log(`TTS: Fetching from ElevenLabs API for ${character}`)
-        const response = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${config.elevenLabsVoiceId}`,
-          {
-            method: 'POST',
-            headers: {
-              'Accept': 'audio/mpeg',
-              'Content-Type': 'application/json',
-              'xi-api-key': this.elevenLabsApiKey
-            },
-            body: JSON.stringify({
-              text: processedText,
-              model_id: 'eleven_monolingual_v1',
-              voice_settings: {
-                stability: config.stability,
-                similarity_boost: config.similarityBoost,
-                style: 0.5,
-                use_speaker_boost: true
-              }
-            })
-          }
-        )
-
-        if (!response.ok) {
-          throw new Error(`ElevenLabs API error: ${response.status}`)
+        if (!this.azureApiKey) {
+          throw new Error('Azure TTS API key not available')
         }
-
-        const audioBlob = await response.blob()
+        
+        console.log(`TTS: Generating with Azure TTS for ${character}`)
+        const audioBlob = await generateAzureTTS(
+          text, 
+          character, 
+          this.azureApiKey,
+          this.azureRegion!
+        )
+        
         audioUrl = URL.createObjectURL(audioBlob)
         
         // Cache the audio URL
         this.audioCache.set(cacheKey, audioUrl)
         console.log(`TTS: Cached audio for ${character} (cache size: ${this.audioCache.size})`)
       } catch (error) {
-        console.error('ElevenLabs TTS error:', error)
+        console.error('TTS API error:', error)
         throw error
       }
     } else {
@@ -304,55 +166,7 @@ class SpeechService {
     })
   }
 
-  private async speakWithBrowserTTS(text: string, character: GhostVoice): Promise<void> {
-    return new Promise((resolve) => {
-      if (!this.synth) {
-        resolve()
-        return
-      }
 
-      const config = VOICE_CONFIGS[character]
-      const processedText = this.addEmotionalPauses(text, character)
-      const utterance = new SpeechSynthesisUtterance(processedText)
-
-      // Apply voice configuration
-      utterance.pitch = config.pitch
-      utterance.rate = config.rate
-      utterance.volume = config.volume
-
-      // Try to select appropriate voice
-      if (this.voices.length > 0) {
-        const femaleChars: GhostVoice[] = ['elara', 'mira', 'selene']
-        const isFemale = femaleChars.includes(character)
-        
-        const preferredVoice = this.voices.find(voice => 
-          isFemale 
-            ? voice.name.toLowerCase().includes('female') || voice.name.toLowerCase().includes('woman')
-            : voice.name.toLowerCase().includes('male') || voice.name.toLowerCase().includes('man')
-        )
-
-        if (preferredVoice) {
-          utterance.voice = preferredVoice
-        } else if (this.voices[0]) {
-          utterance.voice = this.voices[0]
-        }
-      }
-
-      utterance.onend = () => {
-        this.currentUtterance = null
-        resolve()
-      }
-
-      utterance.onerror = (error) => {
-        console.error('Browser TTS error:', error)
-        this.currentUtterance = null
-        resolve()
-      }
-
-      this.currentUtterance = utterance
-      this.synth.speak(utterance)
-    })
-  }
 
   private async processQueue(): Promise<void> {
     if (this.isSpeaking || this.speechQueue.length === 0) {
@@ -363,19 +177,10 @@ class SpeechService {
     const { text, character, resolve } = this.speechQueue.shift()!
 
     try {
-      // Try ElevenLabs first if available
-      if (this.useElevenLabs && this.elevenLabsApiKey) {
-        await this.speakWithElevenLabs(text, character)
-      } else {
-        // Fallback to browser TTS
-        await this.speakWithBrowserTTS(text, character)
-      }
+      await this.speakWithAPI(text, character)
     } catch (error) {
-      console.error('TTS error, falling back to browser TTS:', error)
-      // Fallback to browser TTS on error
-      if (this.useElevenLabs) {
-        await this.speakWithBrowserTTS(text, character)
-      }
+      console.error('TTS error:', error)
+      // Silent fail - just log the error
     } finally {
       resolve()
       this.isSpeaking = false
@@ -384,10 +189,27 @@ class SpeechService {
     }
   }
 
-  async speak(text: string, character: GhostVoice = 'narrator'): Promise<void> {
+  async speak(text: string, character: GhostVoice = 'narrator', force: boolean = false): Promise<void> {
     if (!this.enabled) {
       return
     }
+
+    // Validate character
+    const validCharacters: GhostVoice[] = ['elara', 'harlan', 'mira', 'theo', 'selene', 'narrator']
+    if (!validCharacters.includes(character)) {
+      console.warn(`TTS: Invalid character "${character}", skipping`)
+      return
+    }
+
+    // Check if this text has already been spoken (unless forced)
+    const textKey = `${character}:${text}`
+    if (!force && this.spokenTexts.has(textKey)) {
+      console.log(`TTS: Skipping already spoken text for ${character}`)
+      return
+    }
+
+    // Mark as spoken
+    this.spokenTexts.add(textKey)
 
     // Add to queue and process
     return new Promise((resolve) => {
@@ -397,21 +219,25 @@ class SpeechService {
   }
 
   stop() {
+    // Resolve all pending promises in queue
+    this.speechQueue.forEach(item => item.resolve())
+    
     // Clear the queue
     this.speechQueue = []
     this.isSpeaking = false
 
-    // Stop browser TTS
-    if (this.synth) {
-      this.synth.cancel()
-      this.currentUtterance = null
-    }
-
-    // Stop ElevenLabs audio
+    // Stop audio playback
     if (this.currentAudio) {
       this.currentAudio.pause()
+      this.currentAudio.currentTime = 0
+      this.currentAudio.src = '' // Clear the source to fully stop loading
       this.currentAudio = null
     }
+  }
+
+  clearSpokenHistory() {
+    // Clear the history of spoken texts (useful when restarting game)
+    this.spokenTexts.clear()
   }
 
   toggle() {
@@ -427,12 +253,10 @@ class SpeechService {
   }
 
   isSupported() {
-    return this.synth !== null || this.elevenLabsApiKey !== null
+    return this.azureApiKey !== null
   }
 
-  setUseElevenLabs(use: boolean) {
-    this.useElevenLabs = use && this.elevenLabsApiKey !== null
-  }
+
 }
 
 // Singleton instance

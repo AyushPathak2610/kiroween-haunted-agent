@@ -79,31 +79,32 @@ class MusicService {
     // Try to use pre-generated local file first
     const audioUrl = `/audio/music/${scene}.mp3`
     
+    // Check if file exists before trying to play
     try {
-      console.log(`Music: Loading ${scene} music from local file`)
-      
-      const audio = new Audio(audioUrl)
-      audio.volume = this.volume
-      audio.loop = true // Loop the music
-      
-      this.currentMusic = audio
-      
-      audio.onerror = () => {
-        console.log(`Music: Local file not found, trying to generate...`)
-        // Fallback to generation if file doesn't exist
-        if (this.elevenLabsApiKey) {
-          this.generateAndPlayMusic(scene)
-        }
+      const response = await fetch(audioUrl, { method: 'HEAD' })
+      if (response.ok) {
+        console.log(`Music: Loading ${scene} music from local file`)
+        
+        const audio = new Audio(audioUrl)
+        audio.volume = this.volume
+        audio.loop = true // Loop the music
+        
+        this.currentMusic = audio
+        
+        await audio.play()
+        console.log(`Music: Playing ${scene} music`)
+        return
       }
-      
-      await audio.play()
-      console.log(`Music: Playing ${scene} music`)
     } catch (error) {
-      console.error(`Failed to play ${scene} music:`, error)
-      // Try generation as fallback
-      if (this.elevenLabsApiKey) {
-        this.generateAndPlayMusic(scene)
-      }
+      // File doesn't exist, continue to generation
+    }
+
+    // File not found, try generation
+    console.log(`Music: Local file not found for ${scene}`)
+    if (this.elevenLabsApiKey) {
+      await this.generateAndPlayMusic(scene)
+    } else {
+      console.log(`Music: No API key available, skipping music for ${scene}`)
     }
   }
 

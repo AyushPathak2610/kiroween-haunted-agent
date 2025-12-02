@@ -1,24 +1,28 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Image from 'next/image'
-import { useSpeech } from '@/lib/tts/speechService'
+import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
+import { soundEffects } from '@/lib/audio/soundEffects'
 
 interface StudySceneProps {
   onComplete: () => void
-  onDebate?: (ghost: string, message: string) => void
 }
 
-export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
+export default function StudyScene({ onComplete }: StudySceneProps) {
   const [stage, setStage] = useState<'intro' | 'harlan' | 'puzzle' | 'complete'>('intro')
   const [showingStory, setShowingStory] = useState(false)
   const [storyPart, setStoryPart] = useState(1)
-  const [debating, setDebating] = useState(false)
+  const [showingHint, setShowingHint] = useState(false)
+  const [currentHint, setCurrentHint] = useState('')
+  const [hintCount, setHintCount] = useState(0)
   const [playerPos, setPlayerPos] = useState({ x: 0, y: 0 })
   const [collectedOrbs, setCollectedOrbs] = useState(0)
+  const [collectedOrbPositions, setCollectedOrbPositions] = useState<string[]>([])
   const totalOrbs = 8
-  const { speak } = useSpeech()
+  const hasSpokenRef = useRef<Set<string>>(new Set())
+  // Use speechService directly to avoid re-renders
   const { playSceneMusic } = useMusic()
 
   // Start scene music
@@ -26,41 +30,102 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
     playSceneMusic('study')
   }, [])
 
-  // Speak narration/dialogue when stage changes
+  // Speak narration/dialogue when stage changes (only once per stage)
   useEffect(() => {
+    const stageKey = `stage:${stage}`
+    if (hasSpokenRef.current.has(stageKey)) return
+    hasSpokenRef.current.add(stageKey)
+    
+    // Stop previous audio first and hide any hints
+    speechService.stop()
+    setShowingHint(false)
+    setCurrentHint('')
+    
     if (stage === 'intro') {
-      speak("Books orbit a pulsing crystal. The room itself seems to twist...", 'narrator')
+      speechService.speak("Books orbit a pulsing crystal. The room itself seems to twist...", 'narrator')
     } else if (stage === 'harlan') {
-      speak("I... I remember fragments. The Eternal Harmony project. I wanted to connect us all... forever.", 'harlan')
+      speechService.speak("I... I remember fragments. The Eternal Harmony project. I wanted to connect us all... forever.", 'harlan')
     } else if (stage === 'complete') {
-      speak("I... I remember now. The family. The love. The experiment... it was meant to preserve that.", 'harlan')
+      speechService.speak("I... I remember now. The family. The love. The experiment... it was meant to preserve that.", 'harlan')
     }
-  }, [stage, speak])
+  }, [stage])
+
+  // Speak story parts when they change
+  useEffect(() => {
+    if (showingStory) {
+      speechService.stop()
+      
+      if (storyPart === 1) {
+        speechService.speak("Dr. Harlan Voss. That's who I was. Neuroscientist. Inventor. Fool. I was brilliant. Everyone said so. My research into neural interfaces was groundbreaking. But brilliance without wisdom is dangerous. I loved my family desperately. Elara, my patient wife. Mira, our daughter who looked at me like I hung the stars.", 'harlan')
+      } else if (storyPart === 2) {
+        speechService.speak("But I was always in my study, always working, always distant. I thought: what if we could share thoughts? Share feelings? Be truly, perfectly connected? Eternal Harmony. My magnum opus. I convinced my family to join me. Just one session, I said. We'll be closer than ever.", 'harlan')
+      } else if (storyPart === 3) {
+        speechService.speak("I didn't account for the feedback loop. Five minds, all connected, all amplifying each other's neural patterns. The system overloaded in seconds. Now I know. I killed my family. My beautiful wife. My innocent daughter. My brother and his fiancée. I am the architect of our tragedy. And I deserve this eternal prison.", 'harlan')
+      }
+    }
+  }, [showingStory, storyPart])
+
+  // Cleanup: Stop audio when component unmounts
+  useEffect(() => {
+    return () => {
+      speechService.stop()
+    }
+  }, [])
 
   const handleAskHint = async () => {
-    setDebating(true)
+    setShowingHint(true)
+    setHintCount(prev => prev + 1)
+    
     try {
-      const response = await fetch('/api/ghost-debate', {
+      const response = await fetch('/api/character-hint', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          character: 'harlan',
           puzzleContext: 'Neural maze puzzle - navigate through Harlan\'s fragmented memories, collect memory orbs while avoiding glitch voids',
-          playerMessage: 'How do I navigate this maze?'
+          characterBackground: 'Dr. Harlan Voss, the scientist father who created the Eternal Harmony project. His memories are fragmented and glitchy. He represents intellect, ambition, and the cost of playing god.',
+          hintNumber: hintCount + 1
         })
       })
-      const { debate, consensus } = await response.json()
       
-      debate.forEach((msg: any) => {
-        onDebate?.(msg.ghost, msg.message)
-      })
+      const { story, hint } = await response.json()
+      
+      setCurrentHint(story)
+      speechService.speak(story, 'harlan', true) // Force speak even if repeated
       
       setTimeout(() => {
-        onDebate?.('Consensus', consensus)
-      }, 1000)
+        setCurrentHint(`${story}\n\n${hint}`)
+        speechService.speak(hint, 'harlan', true) // Force speak even if repeated
+        
+        setTimeout(() => {
+          setShowingHint(false)
+          setCurrentHint('')
+        }, 15000)
+      }, 6000)
+      
     } catch (error) {
-      console.error('Debate failed:', error)
+      console.error('Failed to get hint:', error)
+      const fallbackStories = [
+        "I... I can't remember everything. The data packets... they're scattered. My mind feels like a broken algorithm.",
+        "The Eternal Harmony... it was supposed to save us. Instead, it fragmented everything I loved.",
+        "Sometimes I see the equations clearly. Other times, it's just... noise. Static. Confusion."
+      ]
+      const fallbackStory = fallbackStories[hintCount % fallbackStories.length]
+      const fallbackHint = "Navigate carefully through the neural pathways. Collect the memory orbs to restore my fragmented consciousness. Avoid the glitch voids - they represent the corruption in my mind."
+      
+      setCurrentHint(fallbackStory)
+      speechService.speak(fallbackStory, 'harlan', true) // Force speak even if repeated
+      
+      setTimeout(() => {
+        setCurrentHint(`${fallbackStory}\n\n${fallbackHint}`)
+        speechService.speak(fallbackHint, 'harlan', true) // Force speak even if repeated
+        
+        setTimeout(() => {
+          setShowingHint(false)
+          setCurrentHint('')
+        }, 15000)
+      }, 6000)
     }
-    setDebating(false)
   }
 
   const handleMove = (direction: string) => {
@@ -73,12 +138,32 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
         case 'right': newPos.x = Math.min(4, prev.x + 1); break
       }
       
+      // Check if hit glitch
+      const glitchKey = `${newPos.x},${newPos.y}`
+      const glitchPositions = ['2,1', '1,2', '3,3']
+      
+      if (glitchPositions.includes(glitchKey)) {
+        // Reset puzzle - player goes back to start, collected orbs reset
+        soundEffects.playReset()
+        speechService.speak("Glitch! Neural corruption detected. Resetting...", 'harlan')
+        setCollectedOrbPositions([])
+        setCollectedOrbs(0)
+        return { x: 0, y: 0 }
+      }
+      
       // Check if collected orb
       const orbKey = `${newPos.x},${newPos.y}`
-      if (['1,0', '3,1', '0,2', '4,2', '2,3', '1,4', '3,4', '4,4'].includes(orbKey)) {
+      const orbPositions = ['1,0', '3,1', '0,2', '4,2', '2,3', '1,4', '3,4', '4,4']
+      
+      if (orbPositions.includes(orbKey) && !collectedOrbPositions.includes(orbKey)) {
+        soundEffects.playCollect()
+        setCollectedOrbPositions(prev => [...prev, orbKey])
         setCollectedOrbs(prev => {
           const newCount = prev + 1
           if (newCount >= totalOrbs) {
+            // Hide hint when puzzle completes
+            setShowingHint(false)
+            setCurrentHint('')
             setTimeout(() => setStage('complete'), 500)
           }
           return newCount
@@ -93,7 +178,12 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
     <div className="scene study-scene">
       <div className="background">
         <Image
-          src={stage === 'puzzle' ? '/shots/2b_1.png' : stage === 'harlan' ? '/shots/2a_2.png' : '/shots/2a_1.png'}
+          src={
+            stage === 'complete' ? '/shots/2a_3.png' :
+            stage === 'puzzle' ? '/shots/2b_1.png' : 
+            stage === 'harlan' ? '/shots/2a_2.png' : 
+            '/shots/2a_1.png'
+          }
           alt="Study"
           fill
           style={{ objectFit: 'cover' }}
@@ -171,15 +261,16 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
                   const isPlayer = playerPos.x === x && playerPos.y === y
                   const orbKey = `${x},${y}`
                   const hasOrb = ['1,0', '3,1', '0,2', '4,2', '2,3', '1,4', '3,4', '4,4'].includes(orbKey)
+                  const isCollected = collectedOrbPositions.includes(orbKey)
                   const isGlitch = ['2,1', '1,2', '3,3'].includes(orbKey)
                   
                   return (
                     <div 
                       key={x} 
-                      className={`maze-cell ${isPlayer ? 'player' : ''} ${hasOrb ? 'orb' : ''} ${isGlitch ? 'glitch' : ''}`}
+                      className={`maze-cell ${isPlayer ? 'player' : ''} ${hasOrb && !isCollected ? 'orb' : ''} ${isGlitch ? 'glitch' : ''}`}
                     >
                       {isPlayer && '⚡'}
-                      {hasOrb && !isPlayer && '💛'}
+                      {hasOrb && !isCollected && !isPlayer && '💛'}
                       {isGlitch && '❌'}
                     </div>
                   )
@@ -198,8 +289,8 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
               <button onClick={() => handleMove('down')}>↓</button>
             </div>
             
-            <button onClick={handleAskHint} disabled={debating} className="hint-button">
-              {debating ? '🔮 Debating...' : '🔮 Ask Council'}
+            <button onClick={handleAskHint} disabled={showingHint} className="hint-button">
+              {showingHint ? '💭 Harlan is speaking...' : '💭 Ask Harlan for Hint'}
             </button>
           </div>
         </div>
@@ -210,6 +301,14 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
           <h3 style={{ marginBottom: '20px' }}>✨ Memories Restored!</h3>
           <p className="ghost-harlan">"I... I remember now. The family. The love. The experiment... it was meant to preserve that."</p>
           <button onClick={onComplete}>Continue to Nursery →</button>
+        </div>
+      )}
+
+      {/* Movie-style hint subtitle at bottom */}
+      {showingHint && currentHint && (
+        <div className="hint-subtitle">
+          <div className="hint-character">Harlan whispers:</div>
+          <div className="hint-text">{currentHint}</div>
         </div>
       )}
 
@@ -439,6 +538,53 @@ export default function StudyScene({ onComplete, onDebate }: StudySceneProps) {
         @keyframes pulse {
           0%, 100% { box-shadow: 0 0 10px rgba(74, 144, 226, 0.5); }
           50% { box-shadow: 0 0 20px rgba(74, 144, 226, 1); }
+        }
+
+        /* Movie-style hint subtitle at bottom */
+        .hint-subtitle {
+          position: fixed;
+          bottom: 40px;
+          left: 50%;
+          transform: translateX(-50%);
+          max-width: 80%;
+          padding: 20px 30px;
+          background: rgba(0, 0, 0, 0.9);
+          backdrop-filter: blur(10px);
+          border: 2px solid #00bfff;
+          border-radius: 8px;
+          z-index: 100;
+          text-align: center;
+          box-shadow: 0 0 30px rgba(0, 191, 255, 0.5);
+          animation: fadeInUp 0.5s ease-out;
+        }
+
+        .hint-character {
+          font-size: 14px;
+          color: #00bfff;
+          font-weight: bold;
+          margin-bottom: 8px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+        }
+
+        .hint-text {
+          font-size: 18px;
+          color: #ffffff;
+          line-height: 1.6;
+          font-family: 'Georgia', 'Times New Roman', serif;
+          font-style: italic;
+          white-space: pre-line;
+        }
+
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+          }
         }
       `}</style>
     </div>

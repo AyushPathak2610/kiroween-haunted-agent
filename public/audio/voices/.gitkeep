@@ -1,0 +1,3 @@
+# Voice audio files go here
+# Generate them using scripts/generate-audio.ts or they will be generated on-demand via Azure TTS API
+# See MANUAL_AUDIO_GENERATION.md for instructions
