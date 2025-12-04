@@ -8,10 +8,7 @@
     "start": "next start",
     "verify": "node scripts/verify-setup.js",
     "verify-frankenstein": "node scripts/verify-frankenstein.js",
-    "test-mcp": "node mcp-servers/blockchain-vows-server.js",
-    "generate-images": "node scripts/generate-crayon-images.js",
-    "download-images": "node scripts/download-placeholder-images.js",
-    "generate-audio": "node scripts/generate-audio.js"
+    "test-mcp": "node mcp-servers/blockchain-vows-server.js"
   },
   "dependencies": {
     "canvas": "^3.2.0",
