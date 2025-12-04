@@ -41,3 +41,19 @@ When implementing ghost debates:
 - Music files located in `public/audio/music/`
 - Music loops automatically and plays at 15% volume
 - Same track continues across scenes (e.g., Act 1-4 plays through Foyer, Study, Nursery, Hallway)
+
+## Vow Verification System
+
+**Runtime API (Player-Facing):**
+- API endpoint at `/api/mcp/vows`
+- Used in Hallway scene - "Check Theo's Vow" button
+- Call with: `{ action: 'check', person: 'Theo', vow: 'Return' }`
+- Returns message displayed as "The Eternal Record:"
+- Selene speaks the result
+- Optional feature that adds story depth without affecting puzzles
+
+**MCP Server (Development Only):**
+- Located at `mcp-servers/blockchain-vows-server.js`
+- Used by Kiro IDE during development
+- Contains 4 vows (Theo x2, Selene, Harlan)
+- Not deployed with the game

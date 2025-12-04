@@ -7,6 +7,9 @@ node_modules/
 dist/
 build/
 
+
+KIRO_USAGE_WRITEUP.md
+
 # Hackathon submission materials and internal notes (not needed for public repo)
 SOCIAL_MEDIA_POST.md
 DEVTO_BLOG_POST.md
@@ -15,4 +18,8 @@ HOW_KIRO_WAS_USED.md
 JUDGES_PITCH.md
 KIRO_DIRECTORY_UPDATE.md
 SUBMISSION_SUMMARY.md
+AUDIT_RESULTS.md
+TEST_MCP_SERVER.md
+DEMO_VIDEO_GUIDE.md
+docs/
 

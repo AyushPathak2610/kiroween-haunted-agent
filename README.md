@@ -86,6 +86,15 @@ When you click **"Ask Ghosts for Hint"** during a puzzle:
 
 **The magic:** 5 agents with different personalities debating in real-time, never the same conversation twice.
 
+## 📜 Vow Verification System
+
+**The Eternal Record** - In the Hallway scene, click "Check Theo's Vow" to query the vow ledger:
+- API endpoint at `/api/mcp/vows` verifies promises
+- Checks if Theo kept his vow to return to Selene
+- Adds story depth without affecting puzzle mechanics
+- Selene speaks the result with her unique voice
+- Demonstrates blockchain-inspired promise tracking
+
 ---
 
 ## 🎨 Game Scenes
@@ -116,6 +125,7 @@ Cinematic entrance. Lost in a storm, you find the mansion.
 ### 4. Hallway - Theo & Selene
 **Puzzle:** Rose Door-Unlock Maze (answer questions about love and forgiveness)  
 **Ghosts:** Theo and Selene reunite through thorny walls  
+**Special Feature:** "Check Theo's Vow" button queries The Eternal Record  
 **Visuals:** 5 Gemini-generated hallway scenes with thorny vines and locked door  
 **Music:** Act 1-4 score continues (romantic, regretful)
 
@@ -162,7 +172,9 @@ Located in `.kiro/steering/`:
 midnight-at-the-voss-manor/
 ├── app/
 │   ├── api/
-│   │   └── ghost-debate/route.ts    # Debate orchestrator
+│   │   ├── ghost-debate/route.ts    # Debate orchestrator
+│   │   └── mcp/
+│   │       └── vows/route.ts        # MCP blockchain vows API
 │   ├── page.tsx                      # Main game controller
 │   └── globals.css                   # Gothic-cyberpunk styles
 ├── components/

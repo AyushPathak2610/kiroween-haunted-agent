@@ -3,9 +3,9 @@
     "blockchain-vows": {
       "command": "node",
       "args": ["mcp-servers/blockchain-vows-server.js"],
-      "description": "Selene's vow verification ledger - checks if promises were kept",
+      "description": "Blockchain vow verification ledger - checks if Theo, Selene, and other ghosts kept their promises",
       "disabled": false,
-      "autoApprove": ["check_vow", "record_vow"]
+      "autoApprove": ["check_vow", "record_vow", "list_all_vows"]
     },
     "replicate-image-gen": {
       "command": "uvx",
@@ -14,7 +14,7 @@
         "REPLICATE_API_TOKEN": "${REPLICATE_API_KEY}"
       },
       "description": "Mira's crayon drawing generator - creates childlike art when happy",
-      "disabled": false,
+      "disabled": true,
       "autoApprove": ["run_model"]
     },
     "pinecone-memory": {
@@ -24,7 +24,7 @@
         "PINECONE_API_KEY": "${PINECONE_API_KEY}"
       },
       "description": "Harlan's vector memory storage - remembers puzzle solutions",
-      "disabled": false,
+      "disabled": true,
       "autoApprove": ["query", "upsert"]
     }
   }

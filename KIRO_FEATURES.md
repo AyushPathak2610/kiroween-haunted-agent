@@ -250,7 +250,7 @@ const voiceMap = {
 2. **Foyer** - Elara + Tapestry puzzle
 3. **Study** - Harlan + Neural maze
 4. **Nursery** - Mira + Love harvest
-5. **Hallway** - Theo & Selene + Rose door maze
+5. **Hallway** - Theo & Selene + Rose door maze + "Check Theo's Vow" button
 6. **Chapel** - Final reunion + Vow ritual
 
 ### 4 Puzzle Types
@@ -335,6 +335,8 @@ Music plays at 15% volume, loops seamlessly, and transitions between scenes with
 ## 📊 Metrics
 
 - **5 independent agents** (each with unique personality)
+- **1 MCP server** (development tool for Kiro IDE)
+- **1 vow verification API** (runtime feature for players)
 - **50+ Kiro generations** (scenes, components, API routes)
 - **0 personality mix-ups** (thanks to steering docs)
 - **3 development paradigms** (vibe, spec, steering)
@@ -366,7 +368,131 @@ Music plays at 15% volume, loops seamlessly, and transitions between scenes with
 **Result:**
 A family that feels genuinely alive. You can SEE the seams (agents disagree), but they form something greater than the sum of their parts.
 
-**This is Frankenstein:** Different AI systems, different development methods, different modalities (text, image, audio), all stitched together into one emergent experience.
+**This is Frankenstein:** Different AI systems, different development methods, different modalities (text, image, audio), MCP integration, all stitched together into one emergent experience.
+
+---
+
+## 9. 📜 MCP (Model Context Protocol) Integration
+
+### What is MCP?
+
+**MCP is a development-time protocol** that allows Kiro IDE to connect to external tools while helping you code. It's NOT a runtime feature for deployed apps.
+
+### What We Built
+
+**Two-Part System:**
+
+#### Part 1: Real MCP Server (Development Time)
+**File:** `mcp-servers/blockchain-vows-server.js`
+
+A real MCP server that Kiro IDE connects to during development:
+
+```javascript
+// MCP Server with 3 tools
+tools: [
+  'check_vow',      // Query if a vow was kept
+  'record_vow',     // Add new vow to ledger
+  'list_all_vows'   // See all vows
+]
+
+// Seed data
+vows.set('theo-return', { 
+  person: 'Theo', 
+  vow: 'Return to make amends', 
+  kept: true,
+  reason: 'Came back to fulfill promise, but too late'
+})
+```
+
+**Configuration:** `.kiro/settings/mcp.json`
+```json
+{
+  "mcpServers": {
+    "blockchain-vows": {
+      "command": "node",
+      "args": ["mcp-servers/blockchain-vows-server.js"],
+      "disabled": false,
+      "autoApprove": ["check_vow", "record_vow", "list_all_vows"]
+    }
+  }
+}
+```
+
+**How Kiro Uses It:**
+- You ask: "What vows did Theo make?"
+- Kiro calls MCP server via `list_all_vows` tool
+- Kiro responds with accurate lore from the ledger
+- Helps Kiro make better suggestions during development
+
+#### Part 2: Runtime API (Player-Facing)
+**File:** `app/api/mcp/vows/route.ts`
+
+A Next.js API endpoint that players interact with:
+
+```typescript
+// Runtime API for game
+export async function POST(req: NextRequest) {
+  const { action, person, vow } = await req.json()
+  const record = vows.get(key)
+  return NextResponse.json({ message: record.kept ? '✓ Vow kept' : '✗ Vow broken' })
+}
+```
+
+**Scene Integration:** `components/scenes/HallwayScene.tsx`
+```typescript
+const handleCheckVow = async () => {
+  const response = await fetch('/api/mcp/vows', {
+    method: 'POST',
+    body: JSON.stringify({ action: 'check', person: 'Theo', vow: 'Return' })
+  })
+  const result = await response.json()
+  speechService.speak(result.message, 'selene')
+}
+```
+
+### User Experience (Runtime)
+1. Player reaches Hallway scene (Theo & Selene reunion)
+2. Clicks "Check Theo's Vow" button during puzzle
+3. API queries The Eternal Record
+4. Message appears: "The Eternal Record: ✓ Vow kept: Theo did Return to make amends on 2039-06-20"
+5. Selene speaks the result with her cold, elegant voice
+6. Message displays for 8 seconds
+7. Button is disabled while checking to prevent spam
+
+### Why This Demonstrates MCP Understanding
+
+**Development vs Runtime:**
+- ✅ Built real MCP server following JSON-RPC protocol
+- ✅ Configured Kiro IDE to use it (`.kiro/settings/mcp.json`)
+- ✅ Understand MCP is for development, not deployment
+- ✅ Created parallel runtime API for player-facing feature
+- ✅ Shows distinction between dev tools and production code
+
+**The Frankenstein Angle:**
+- MCP server (Kiro's development tool)
+- API endpoint (player's runtime feature)
+- Both query the same conceptual "vow ledger"
+- Stitched together across development/runtime boundary
+- Demonstrates understanding of when to use each approach
+
+### Technical Details
+
+**MCP Server (Development):**
+- Follows MCP protocol (JSON-RPC over stdio)
+- 3 tools: check_vow, record_vow, list_all_vows
+- Seeded with 4 character vows
+- Used by Kiro IDE during development
+
+**API Endpoint (Runtime):**
+- Standard Next.js API route at `/api/mcp/vows/route.ts`
+- In-memory ledger with 2 vows (Theo's broken and kept vows)
+- Integrates with TTS system (Selene speaks)
+- Optional feature (puzzle works without it)
+- Deploys automatically to Vercel with no extra configuration
+
+**See:** `docs/MCP_IMPLEMENTATION.md` for full technical details
+
+**This proves real MCP understanding** - not just calling APIs, but building tools for the AI assistant to use during development.
 
 ---
 

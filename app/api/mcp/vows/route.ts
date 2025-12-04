@@ -1,32 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { spawn } from 'child_process'
 
-export async function POST(req: NextRequest): Promise<NextResponse> {
+// Simple in-memory vow ledger (simulates blockchain MCP)
+const vows = new Map([
+  ['theo-marry-selene', { person: 'Theo', vow: 'Marry Selene', kept: false, timestamp: '2039-01-15' }],
+  ['theo-return', { person: 'Theo', vow: 'Return to make amends', kept: true, timestamp: '2039-06-20' }],
+])
+
+export async function POST(req: NextRequest) {
   try {
     const { action, person, vow } = await req.json()
     
-    // Call the blockchain-vows MCP server
-    const mcpServer = spawn('node', ['mcp-servers/blockchain-vows-server.js'])
-    
-    const request = {
-      method: 'tools/call',
-      params: {
-        name: action === 'check' ? 'check_vow' : 'record_vow',
-        arguments: { person, vow }
+    if (action === 'check') {
+      const key = `${person.toLowerCase()}-${vow.toLowerCase().replace(/\s+/g, '-')}`
+      const record = vows.get(key)
+      
+      if (record) {
+        return NextResponse.json({
+          found: true,
+          ...record,
+          message: record.kept 
+            ? `✓ Vow kept: ${record.person} did ${record.vow} on ${record.timestamp}`
+            : `✗ Vow broken: ${record.person} failed to ${record.vow}`
+        })
       }
+      
+      return NextResponse.json({ 
+        found: false, 
+        message: 'No record of this vow in the ledger' 
+      })
     }
     
-    mcpServer.stdin.write(JSON.stringify(request) + '\n')
-    
-    return new Promise<NextResponse>((resolve) => {
-      mcpServer.stdout.on('data', (data) => {
-        const response = JSON.parse(data.toString())
-        resolve(NextResponse.json(response.content[0].text))
-        mcpServer.kill()
-      })
-    })
+    return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
   } catch (error) {
-    console.error('Vows MCP error:', error)
-    return NextResponse.json({ error: 'Vow check failed' }, { status: 500 })
+    console.error('Vow check error:', error)
+    return NextResponse.json({ error: 'Failed to check vow' }, { status: 500 })
   }
 }

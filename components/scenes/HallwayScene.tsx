@@ -16,6 +16,7 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
   const [currentWall, setCurrentWall] = useState(0)
   const [showingHint, setShowingHint] = useState(false)
   const [currentHint, setCurrentHint] = useState('')
+  const [vowResult, setVowResult] = useState<string>('')
   const hasSpokenRef = useRef<Set<string>>(new Set())
   const { playSceneMusic } = useMusic()
 
@@ -135,6 +136,28 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
     }, 10000)
   }
 
+  const handleCheckVow = async () => {
+    try {
+      const response = await fetch('/api/mcp/vows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'check', 
+          person: 'Theo', 
+          vow: 'Return' 
+        })
+      })
+      
+      const result = await response.json()
+      setVowResult(result.message)
+      speechService.speak(result.message, 'selene')
+      
+      setTimeout(() => setVowResult(''), 8000)
+    } catch (error) {
+      console.error('Failed to check vow:', error)
+    }
+  }
+
   return (
     <div className="scene hallway-scene">
       <div className="background">
@@ -239,6 +262,9 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
             <button onClick={handleAskHint} disabled={showingHint} className="hint-button">
               {showingHint ? '💭 Theo whispers...' : '💭 Ask Theo for Hint'}
             </button>
+            <button onClick={handleCheckVow} disabled={!!vowResult} className="vow-button">
+              {vowResult ? '📜 Checking ledger...' : '📜 Check Theo\'s Vow'}
+            </button>
           </div>
         </div>
       )}
@@ -247,6 +273,13 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
         <div className="hint-subtitle">
           <div className="hint-character">Theo whispers:</div>
           <div className="hint-text">{currentHint}</div>
+        </div>
+      )}
+
+      {vowResult && (
+        <div className="hint-subtitle vow-result">
+          <div className="hint-character">The Eternal Record:</div>
+          <div className="hint-text">{vowResult}</div>
         </div>
       )}
 
@@ -518,11 +551,12 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
 
         .puzzle-controls {
           display: flex;
+          gap: 15px;
           justify-content: center;
           margin-top: 20px;
         }
 
-        .hint-button {
+        .hint-button, .vow-button {
           padding: 15px 30px;
           background: rgba(139, 69, 19, 0.3);
           backdrop-filter: blur(5px);
@@ -535,14 +569,23 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
           transition: all 0.3s;
         }
 
-        .hint-button:hover:not(:disabled) {
+        .hint-button:hover:not(:disabled), .vow-button:hover:not(:disabled) {
           background: rgba(139, 69, 19, 0.5);
           transform: scale(1.05);
         }
 
-        .hint-button:disabled {
+        .hint-button:disabled, .vow-button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+
+        .vow-button {
+          background: rgba(75, 0, 130, 0.3);
+          border-color: rgba(138, 43, 226, 0.6);
+        }
+
+        .vow-button:hover:not(:disabled) {
+          background: rgba(75, 0, 130, 0.5);
         }
 
         .hint-subtitle {
@@ -560,6 +603,11 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
           text-align: center;
           box-shadow: 0 0 30px rgba(212, 165, 116, 0.5);
           animation: fadeInUp 0.5s ease-out;
+        }
+
+        .vow-result {
+          border-color: #8a2be2;
+          box-shadow: 0 0 30px rgba(138, 43, 226, 0.5);
         }
 
         .hint-character {
