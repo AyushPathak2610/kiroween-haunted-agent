@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
 import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
 
@@ -76,12 +75,16 @@ export default function IntroScene({ onComplete }: IntroSceneProps) {
       {!started ? (
         // Start screen - requires user interaction for audio
         <div className="start-screen">
-          <Image
+          <img
             src="/shots/int_start.png"
             alt="Start Screen"
-            fill
-            style={{ objectFit: 'cover' }}
-            priority
+            style={{ 
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover'
+            }}
           />
           <div className="start-content">
             <h1 className="title">MIDNIGHT AT THE VOSS MANOR</h1>
@@ -96,12 +99,16 @@ export default function IntroScene({ onComplete }: IntroSceneProps) {
         <>
           <div className="shot-container">
             {currentShot <= totalShots && (
-              <Image
+              <img
                 src={`/shots/intro_${currentShot}.png`}
                 alt={`Intro shot ${currentShot}`}
-                fill
-                style={{ objectFit: 'cover' }}
-                priority
+                style={{ 
+                  position: 'absolute',
+                  inset: 0,
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover'
+                }}
               />
             )}
           </div>

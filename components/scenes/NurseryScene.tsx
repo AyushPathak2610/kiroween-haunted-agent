@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
 import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
 import { soundEffects } from '@/lib/audio/soundEffects'
@@ -170,7 +169,7 @@ export default function NurseryScene({ onComplete }: NurserySceneProps) {
   return (
     <div className="scene nursery-scene">
       <div className="background">
-        <Image
+        <img
           src={
             stage === 'complete' ? '/shots/3b_1.png' :
             stage === 'puzzle' ? '/shots/3a_3.png' : 
@@ -178,9 +177,13 @@ export default function NurseryScene({ onComplete }: NurserySceneProps) {
             '/shots/3a_1.png'
           }
           alt="Nursery"
-          fill
-          style={{ objectFit: 'cover' }}
-          priority
+          style={{ 
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
         />
       </div>
 

@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Image from 'next/image'
 
 interface TransitionScreenProps {
   onComplete: () => void
@@ -32,12 +31,16 @@ export default function TransitionScreen({ onComplete }: TransitionScreenProps) 
 
   return (
     <div className="transition-screen">
-      <Image
+      <img
         src="/shots/hallway.png"
         alt="Hallway Transition"
-        fill
-        style={{ objectFit: 'cover' }}
-        priority
+        style={{ 
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover'
+        }}
         onLoad={() => setImageLoaded(true)}
       />
       

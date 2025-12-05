@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
 import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
 import { soundEffects } from '@/lib/audio/soundEffects'
@@ -161,7 +160,7 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
   return (
     <div className="scene hallway-scene">
       <div className="background">
-        <Image
+        <img
           src={
             stage === 'complete' ? '/shots/4b_2.png' :
             stage === 'puzzle' ? '/shots/4a_3.png' :
@@ -170,9 +169,13 @@ export default function HallwayScene({ onComplete }: HallwaySceneProps) {
             '/shots/4a_1.png'
           }
           alt="Hallway"
-          fill
-          style={{ objectFit: stage === '5_1_1' ? 'contain' : 'cover' }}
-          priority
+          style={{ 
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: stage === '5_1_1' ? 'contain' : 'cover'
+          }}
         />
       </div>
 

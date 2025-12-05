@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
 import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
 import { soundEffects } from '@/lib/audio/soundEffects'
@@ -143,7 +142,7 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
   return (
     <div className="scene chapel-scene">
       <div className="background">
-        <Image
+        <img
           src={
             stage === 'ending' ? '/shots/finale_1.png' : 
             stage === 'ritual' ? '/shots/5b_1.png' : 
@@ -152,9 +151,13 @@ export default function ChapelScene({ onDebate }: ChapelSceneProps) {
             '/shots/5a_1.png'
           }
           alt="Chapel"
-          fill
-          style={{ objectFit: 'cover' }}
-          priority
+          style={{ 
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
         />
       </div>
 

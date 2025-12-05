@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import Image from 'next/image'
 import { speechService } from '@/lib/tts/speechService'
 import { useMusic } from '@/lib/audio/musicService'
 import { soundEffects } from '@/lib/audio/soundEffects'
@@ -181,7 +180,7 @@ export default function FoyerScene({ onComplete }: FoyerSceneProps) {
   return (
     <div className="scene foyer-scene">
       <div className="background">
-        <Image
+        <img
           src={
             stage === 'complete' ? '/shots/1a_3.png' :
             stage === 'puzzle' ? '/shots/1b_1.png' : 
@@ -189,9 +188,13 @@ export default function FoyerScene({ onComplete }: FoyerSceneProps) {
             '/shots/1a_1.png'
           }
           alt="Foyer"
-          fill
-          style={{ objectFit: 'cover' }}
-          priority
+          style={{ 
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover'
+          }}
         />
       </div>
 
