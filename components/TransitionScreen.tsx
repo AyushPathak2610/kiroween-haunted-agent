@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import Image from 'next/image'
 
 interface TransitionScreenProps {
@@ -8,8 +8,12 @@ interface TransitionScreenProps {
 }
 
 export default function TransitionScreen({ onComplete }: TransitionScreenProps) {
+  const [imageLoaded, setImageLoaded] = useState(false)
+
   useEffect(() => {
-    // Play walking/boot sound effect (overlaps with background music)
+    if (!imageLoaded) return
+
+    // Play walking/boot sound effect only after image loads
     const audio = new Audio('/audio/sfx/footsteps.m4a')
     audio.volume = 0.7
     audio.play().catch(err => console.log('Footsteps audio play failed:', err))
@@ -24,7 +28,7 @@ export default function TransitionScreen({ onComplete }: TransitionScreenProps) 
       audio.pause()
       audio.currentTime = 0
     }
-  }, [onComplete])
+  }, [onComplete, imageLoaded])
 
   return (
     <div className="transition-screen">
@@ -34,6 +38,7 @@ export default function TransitionScreen({ onComplete }: TransitionScreenProps) 
         fill
         style={{ objectFit: 'cover' }}
         priority
+        onLoad={() => setImageLoaded(true)}
       />
       
       <style jsx>{`
